@@ -6,6 +6,15 @@ Adafruit_GPS GPS(&mySerial);
 Zumo32U4Motors motors;
 Zumo32U4ButtonA buttonA;
 
+#include <NewPing.h>
+#define maximum_distance 200
+NewPing sonarLeft(3,2, maximum_distance);
+NewPing sonarRight(4,5, maximum_distance);
+
+enum action {AVOID, DRIVE, TURN};
+float targetLat;
+float targetLong;
+
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(4800);
@@ -14,16 +23,38 @@ void setup() {
 }
 
 void loop() {
-  switch(){
+  switch(decideAction()){
     case AVOID:
+    
     break;
     case DRIVE:
+    drive();
+    break;
+    case TURN:
+    
     break;
   }
 }
 
+
+action decideAction(){
+  //if ultrasonics detect obstacle avoid said obstacle
+  if(){
+    return AVOID;
+  }
+  else {
+    //if delta between heading and target is too much adjust course
+    float dDegrees = calculateTargetDegrees(targetLat, targetLong) - gps.angle;
+    if(!dDegrees => -20 && !dDegrees =< 20){
+      return TURN;
+    }
+  }
+  //if everything OK keep driving
+  return DRIVE;
+}
+
 void drive(){
-  motors.setSpeeds(200,200;
+  motors.setSpeeds(200,200);
 }
 
 //turn to target coord using gps.Angle to get current heading degrees
@@ -53,7 +84,7 @@ float calculateTargetDegrees(float targetLat, float targetLong){
   float currentLong = GPS.longitudeDegrees;
   float dLong = targetLong - currentLong;
 
-  //??
+  //math magic to calculate true heading
   float X = cos(targetLat) * sin(dLong);
   float Y = cos(currentLat) * sin(targetLat) - sin(currentLat) * cos(targetLat) * cos(dLong);
 
