@@ -1,6 +1,8 @@
 //GPS
 #include <Adafruit_GPS.h>
-SoftwareSerial mySerial(3, 2);
+#include <SoftwareSerial.h>
+
+SoftwareSerial mySerial(1, 0);
 Adafruit_GPS GPS(&mySerial);
 
 //Zumo
@@ -20,6 +22,7 @@ float targetLatitude;
 float targetLongitude;
 
 //Compass
+#include <Wire.h>
 #include <LSM303.h>
 #define CALIBRATION_SAMPLES 70
 #define DEVIATION_THRESHOLD 5
@@ -36,22 +39,32 @@ void setup() {
   GPS.begin(9600);
   GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
 
+  delay(1000);
+  
+  Wire.begin();
   compass.init();
-
   // Enables accelerometer and magnetometer
   compass.enableDefault();
-
+  
   compass.writeReg(LSM303::CRB_REG_M, CRB_REG_M_2_5GAUSS); // +/- 2.5 gauss sensitivity to hopefully avoid overflow problems
   compass.writeReg(LSM303::CRA_REG_M, CRA_REG_M_220HZ);
   Serial.println("Calibrating compass");
-  
+
+
+  delay(2000);
   calibrateCompass();
-  delay(1000);
+  Serial.println("After Calibrating compass");
+  
+  
   Serial.println("Waiting for satellite fix");
   while(GPS.fixquality == 0){
-    Serial.println("# of connected satellites = ");
-    Serial.print(GPS.satellites);
-    delay(100);
+    Serial.print("# of connected satellites = ");
+    Serial.println(GPS.satellites);
+
+    compass.readMag();
+    Serial.print("ZumoHeading = ");
+    Serial.println(compass.heading());
+    delay(2500);
   }
 }
 
@@ -88,7 +101,6 @@ void loop() {
   }
 }
 
-
 action decideAction(){
   //if ultrasonics detect obstacle avoid said obstacle
   if(sonarLeft.ping_cm() < 15 || sonarRight.ping_cm() < 15){
@@ -96,7 +108,7 @@ action decideAction(){
   }
   else {
     //if delta between heading and target is too much adjust course
-    float dDegrees = calculateTargetDegrees(targetLatitude, targetLongitude) - GPS.angle;
+    float dDegrees = calculateTargetDegrees(targetLatitude, targetLongitude) - averageHeading();
     if(dDegrees <= -10 && dDegrees >= 10){
       return TURN;
     }
@@ -111,19 +123,19 @@ void drive(){
 
 //turn to target coord using gps.Angle to get current heading degrees
 void turnToTarget(float targetLat, float targetLong){
-  float currentAngle = GPS.angle;
-  float targetAngle = calculateTargetDegrees(targetLat, targetLong);
-  float relativeAngle = targetAngle - currentAngle;
+  float currentHeading = averageHeading();
+  float targetHeading = calculateTargetDegrees(targetLat, targetLong);
+  float deltaHeading = targetHeading - currentHeading;
   float turnAngle;
 
   //Calculate angle which zumo needs to turn to.
-  if(relativeAngle < -180){
-    turnAngle = 360 - relativeAngle;
+  if(deltaHeading < -180){
+    turnAngle = 360 - deltaHeading;
     Serial.println("Turn angle = ");
     Serial.print("turn angle");
   }
   else{
-    turnAngle = relativeAngle;
+    turnAngle = deltaHeading;
     Serial.println("Turn angle = ");
     Serial.print("turn angle");
   }
@@ -169,6 +181,8 @@ float toDeg(float convert){
 
 
 void calibrateCompass(){
+  motors.setLeftSpeed(SPEED);
+  motors.setRightSpeed(-SPEED);
   for(int index = 0; index < CALIBRATION_SAMPLES; index ++){
     // Take a reading of the magnetic vector and store it in compass.
     compass.read();
@@ -179,10 +193,12 @@ void calibrateCompass(){
     running_max.x = max(running_max.x, compass.m.x);
     running_max.y = max(running_max.y, compass.m.y);
 
-    Serial.println(index);
+    //Serial.println(index);
 
     delay(50);
   }
+  motors.setLeftSpeed(0);
+  motors.setRightSpeed(0);
 }
 
 float averageHeading()
